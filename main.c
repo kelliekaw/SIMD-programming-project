@@ -17,6 +17,18 @@ void kernel_c(const float* A, const float* X, float* Y, size_t m, size_t n)
     }
 }
 
+void kernel_reference(const float* A, const float* X, double* Y, size_t m, size_t n)
+{
+    for (size_t i = 0; i < m; i++) {
+        double sum = 0.0;
+
+        for (size_t j = 0; j < n; j++) {
+            sum += (double)A[i * n + j] * (double)X[j];
+        }
+
+        Y[i] = sum;
+    }
+}
 
 void kernel_scalar(const float* A, const float* X, float* Y, size_t m, size_t n);
 
@@ -43,7 +55,31 @@ int correctness_check(const float* Y1, const float* Y2, size_t m)
             return 0;
         }
     }
-	return 1; // Equal
+	return 1; 
+}
+
+int reference_check(const double* Y_ref,
+    const float* Y_test, size_t m)
+{
+    const double tolerance = 0.005; // 0.5%
+
+    for (size_t i = 0; i < m; i++) {
+        double difference = fabs(Y_ref[i] - (double)Y_test[i]);
+        double allowed_error =
+            tolerance * fmax(1.0, fabs(Y_ref[i]));
+
+        if (difference > allowed_error) {
+            printf(
+                "Mismatch at Y[%zu]: reference=%.7f, "
+                "test=%.7f, difference=%.7f, tolerance=%.7f\n",
+                i, Y_ref[i], Y_test[i],
+                difference, allowed_error
+            );
+            return 0;
+        }
+    }
+
+    return 1;
 }
 
 typedef void (*kernel_func)(const float* A, const float* X, float* Y, size_t m, size_t n);
@@ -75,9 +111,10 @@ int main(void)
     float* Y_scalar = malloc(m * sizeof(float));
     float* Y_xmm = malloc(m * sizeof(float));
     float* Y_ymm = malloc(m * sizeof(float));
+	double* Y_ref = malloc(m * sizeof(double));
 
     if (!A || !X || !Y_c || !Y_scalar ||
-        !Y_xmm || !Y_ymm) {
+        !Y_xmm || !Y_ymm || !Y_ref) {
         printf("Memory allocation failed.\n");
         free(A);
         free(X);
@@ -85,6 +122,7 @@ int main(void)
         free(Y_scalar);
         free(Y_xmm);
         free(Y_ymm);
+		free(Y_ref);
         return 1;
     }
 
@@ -102,7 +140,8 @@ int main(void)
     kernel_scalar(A, X, Y_scalar, m, n);
     kernel_xmm(A, X, Y_xmm, m, n);
     kernel_ymm(A, X, Y_ymm, m, n);
-
+	kernel_reference(A, X, Y_ref, m, n);
+   
     // Benchmarking
     double time_c = benchmark_kernel(
         kernel_c, A, X, Y_c, m, n, reps);
@@ -124,7 +163,8 @@ int main(void)
     size_t count = (m < 5) ? m : 5;
 
     printf("\n--- C ---\n");
-    printf("Correctness: Reference\n");
+    printf("Correctness: %s\n",
+        reference_check(Y_ref, Y_c, m) ? "PASS" : "FAIL");
     printf("Average execution time: %.6f ms\n", time_c);
 
     printf("First %zu Y values: ", count);
@@ -138,7 +178,7 @@ int main(void)
 
     printf("\n\n--- Scalar x86-64 ---\n");
     printf("Correctness: %s\n",
-        correctness_check(Y_c, Y_scalar, m) ? "PASS" : "FAIL");
+        reference_check(Y_ref, Y_scalar, m) ? "PASS" : "FAIL");
     printf("Average execution time: %.6f ms\n", time_scalar);
 
     printf("First %zu Y values: ", count);
@@ -152,7 +192,7 @@ int main(void)
 
     printf("\n\n--- SIMD XMM ---\n");
     printf("Correctness: %s\n",
-        correctness_check(Y_c, Y_xmm, m) ? "PASS" : "FAIL");
+        reference_check(Y_ref, Y_xmm, m) ? "PASS" : "FAIL");
     printf("Average execution time: %.6f ms\n", time_xmm);
 
     printf("First %zu Y values: ", count);
@@ -166,7 +206,7 @@ int main(void)
 
     printf("\n\n--- SIMD YMM ---\n");
     printf("Correctness: %s\n",
-        correctness_check(Y_c, Y_ymm, m) ? "PASS" : "FAIL");
+        reference_check(Y_ref, Y_ymm, m) ? "PASS" : "FAIL");
     printf("Average execution time: %.6f ms\n", time_ymm);
 
     printf("First %zu Y values: ", count);
@@ -187,6 +227,7 @@ int main(void)
     free(Y_scalar);
     free(Y_xmm);
     free(Y_ymm);
+    free(Y_ref);
 
     return 0;
 }
