@@ -97,6 +97,9 @@ The Release version runs significantly faster than the Debug version because it 
 
 ### Correctness Checking and Tolerance
 
+A separate double-precision reference implementation calculates the matrix-vector product using `double` accumulation. The outputs from the four single-precision kernels are compared against this reference.
+
+
 The correctness check usese a relative tolerance of 0.5% (0.005). For each output element, the absolute difference between the reference and tested result is calculated:
 
 $$
@@ -121,13 +124,13 @@ For large input sizes, the accumulated single-precision rounding error becomes m
 
 The reference implementation was also independently checked using the repeating input pattern. The independently calculated first output value closely matched the double-precision reference, providing additional confidence in the reference result.
 
-### Correctness Check — C
+### Correctness Check - C
 
 The C implementation serves as the baseline kernel. Its output is compared against the double-precision reference implementation.
 
 At $n = 2^{20}$, the C implementation passes the correctness check. However, at $n = 2^{25}$, it fails. This could be because the accumulated single-precision rounding error causes its output to differ from the reference beyond the specified tolerance.
 
-### Correctness Check — Scalar x86-64 assembly
+### Correctness Check - Scalar x86-64 assembly
 
 The scalar assembly implementation performs multiplication and accumulation one element at a time. Its output is compared against the same double-precision reference. 
 
@@ -135,7 +138,7 @@ At $n = 2^{20}$, the scalar assembly implementation passes the correctness check
 
 The C and scalar assembly implementations produce identical outputs for the recorded $n = 2^{25}$ test, demonstrating similar numerical behavior for these inputs.
 
-### Correctness Check — SIMD XMM
+### Correctness Check - SIMD XMM
 
 The XMM implementation uses 128-bit vector registers to process four single-precision floating-point elements per vector iteration.After processing complete groups of four elements, it combines the partial sums and handles any remaining elements using scalar operations.
 
@@ -143,7 +146,7 @@ At $n = 2^{20}$, the XMM implementation passes the correctness check. However, a
 
 This demonstrates that changing the order of floating-point accumulation can improve numerical accuracy without necessarily bringing the result within the selected tolerance.
 
-### Correctness Check — SIMD YMM
+### Correctness Check - SIMD YMM
 
 The YMM implementation uses 256-bit vector registers to process eight single-precision floating-point elements per vector iteration. It combines the partial sums after the vector loop and uses scalar operations to process any remaining elements.
 
@@ -151,7 +154,17 @@ The YMM implementation passes the correctness check at both $n = 2^{20}$ and $n 
 
 These results suggest that the YMM implementation provides a favorable balance between performance and numerical accuracy for the tested inputs. However, passing the tolerance check does not imply that its output is mathematically exact.
 
-### Recorded Results
+### SIMD boundary checks
+
+The boundary test uses \(n=1003\), which is not divisible by either four or eight. This tests whether the SIMD implementations correctly handle remaining elements after processing complete vectors.
+
+The implementations process full vectors first and then use scalar operations for the remaining elements.
+
+![boundary_check](screenshots/1003.png)
+
+For the recorded boundary test, all four implementations passed the numerical comparison against the double-precision reference.
+
+### Recorded Results and Analysis
 
 | Test case    | C    | Scalar x86-64 | SIMD XMM | SIMD YMM |
 | ------------ | ---- | ------------- | -------- | -------- |
@@ -168,16 +181,6 @@ These results illustrate how single-precision accumulation can lose numerical ac
 The double-precision reference was also independently checked using the repeating pattern of the initialized matrix and vector. The two calculations for the first output element agreed to within approximately 0.00046, supporting the reliability of the reference result.
 
 **Important:** Passing the numerical comparison does not mean that an implementation is mathematically exact. Similarly, failing the selected tolerance does not necessarily indicate an indexing or memory-access bug; it may indicate accumulated floating-point error. Numerical accuracy and functional correctness should be evaluated separately.
-
-### SIMD boundary checks
-
-The boundary test uses \(n=1003\), which is not divisible by either four or eight. This tests whether the SIMD implementations correctly handle remaining elements after processing complete vectors.
-
-The implementations process full vectors first and then use scalar operations for the remaining elements.
-
-![boundary_check](screenshots/1003.png)
-
-For the recorded boundary test, all four implementations passed the numerical comparison against the double-precision reference.
 
 ## 4. Comparative Execution-Time Results
 
@@ -256,11 +259,7 @@ The theoretical speedup from SIMD width alone is not a guarantee of actual end-t
 
 Consequently, the measured speedup reflects the complete implementation on the tested machine rather than SIMD register width alone.
 
-## 6. Correctness and Numerical Accuracy
 
-A separate double-precision reference implementation calculates the matrix-vector product using `double` accumulation. The outputs from the four single-precision kernels are compared against this reference.
-
-The current comparison uses a relative tolerance of 0.5%, with an absolute floor for values whose magnitude is less than one.
 
 
 
