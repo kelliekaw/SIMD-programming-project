@@ -27,17 +27,7 @@ The implementations are evaluated on execution time, speedup, agreement with the
 * **Repetitions:** 30 timed repetitions per kernel, after one untimed warm-up call
 * **Matrix storage:** one contiguous array in row-major order; element $(i, j)$ is `A[i * n + j]`
 
-**Test machine:**
-
-| Item | Value |
-| --- | --- |
-| CPU | Intel Core i5-11300H (4 cores / 8 threads, 3.1 GHz base); AVX and AVX2 supported |
-| RAM | 7.70 GiB visible to Windows (only about 2 GiB was free during testing) |
-| OS | Windows 11 Home (10.0.26200) |
-| C compiler used for the measurements | MSVC 14.29 (Visual Studio 2019 Build Tools, toolset v142), via `build.cmd` |
-| Assembler | NASM 2.15.05 |
-
-The project file targets toolset v145 (Visual Studio 2026). The Visual Studio 2026 installation on the test machine does not have the C++ workload installed, so the measurements were built with `build.cmd`, which calls `cl.exe` with the same compiler options as the project's Debug and Release configurations. The `.vcxproj` was also built successfully with MSBuild for both configurations using `/p:PlatformToolset=v142`.
+All measurements were taken on Windows on an AVX2-capable CPU. The executables were built with `build.cmd` (MSVC and NASM), which uses the same compiler options as the project's Debug and Release configurations.
 
 ### Matrix Dimensions: $m = 10$ vs. a Square Matrix
 
@@ -295,13 +285,14 @@ Together with the exact-integer self-test ($n = 1$ to $40$ and the block-boundar
 
 Execution times are in milliseconds (ms). Each time is the average of 30 back-to-back kernel calls measured with one `QueryPerformanceCounter` interval, after one untimed warm-up call. Initialization, allocation, correctness checking and printing are all outside the timed region.
 
-For $n = 2^{20}$ and $2^{25}$ the program was run **three times**. The tables show the mean of the three 30-run averages (90 calls in total), and the range across the three runs. The other sizes were run once (30 calls).
+For $n = 2^{20}$ and $2^{25}$ the program was run **three times**. The tables show the mean of the three 30-run averages (90 calls in total). The other sizes were run once (30 calls).
 
 $$
 \text{Speedup} = \frac{\text{Average C execution time}}{\text{Average execution time of the tested kernel}}
 $$
 
 Debug and Release results are shown in separate tables and must not be compared with each other: the C kernel is compiled differently in each, while the assembly kernels are identical.
+
 ### 4.1 Release Configuration
 
 
@@ -416,7 +407,7 @@ The previous version of this README reported the following Release times. They w
 
 In **Release**, scalar assembly was 0.99×–1.03× the speed of C, essentially the same. The generated code for the C kernel (inspected with `/FAs`) uses scalar `mulss`/`addss` instructions and no packed instructions. Under `/fp:precise`, the compiler is not allowed to reorder the floating-point additions, so it cannot vectorize the loop. Both kernels therefore do the same work: one multiplication and one addition per element on a single chain of dependent additions.
 
-At $n = 2^{25}$ both kernels process about one element per nanosecond (335.5 million elements in about 340 ms). That is consistent with the roughly 4-cycle latency of each dependent `addss` at the CPU's turbo frequency. The loop is limited by that dependency chain, not by the instruction count.
+At $n = 2^{25}$ both kernels process about 1.3 elements per nanosecond (335.5 million elements in about 259 ms). That rate is consistent with the latency of each dependent `addss`, since every addition must wait for the previous one. The loop is limited by that dependency chain, not by the instruction count.
 
 In **Debug**, scalar assembly achieved speedups of 3.86x to 4.01x compared to C, because unoptimized code keeps `partial` and `total` on the stack and reloads them on every iteration. The assembly kernels are not affected by the compiler settings and take the same time in both configurations. The Debug "speedups" are therefore mostly a measure of how slow unoptimized C is.
 
@@ -440,24 +431,34 @@ Overall, YMM consistently outperformed XMM in the updated measurements. However,
 
 ### 5.4 Why the Measured Speedup Is Not Equal to the Vector Width
 
-* **Memory bandwidth is the main limit for large inputs.** At $n = 2^{25}$, each call reads the 1.25 GiB matrix once. The 128 MiB vector $X$ does not fit in the 8 MB L3 cache, so it is read again for each of the 10 rows, which adds another 1.25 GiB. Moving about 2.7 GB in 158 ms is about 17 GB/s, and XMM reaches nearly the same rate. Once both SIMD kernels are waiting on memory, a wider register cannot help, which is why XMM and YMM are almost equal at $2^{25}$ and at $2^{28}$.
-* **In-cache data shows the true SIMD effect.** With small data ($n = 1003$), nothing waits on memory, and every kernel is limited by its single chain of dependent additions. Each XMM addition handles four elements and each YMM addition eight, so the speedups (3.99× and 8.58×) match the vector widths.
+* **Memory bandwidth is the main limit for large inputs.** At $n = 2^{25}$, each call reads the 1.25 GiB matrix once. The 128 MiB vector $X$ does not fit in the last-level cache, so it is read again for each of the 10 rows, which adds another 1.25 GiB. Moving about 2.7 GB in 92 ms is about 29 GB/s for YMM, and XMM reaches nearly the same rate (about 26.5 GB/s in 101 ms). Once both SIMD kernels are waiting on memory, a wider register cannot help, which is why XMM and YMM are almost equal at $2^{25}$ and at $2^{28}$.
+* **In-cache data shows the true SIMD effect.** With small data ($n = 1003$), nothing waits on memory, and every kernel is limited by its single chain of dependent additions. Each XMM addition handles four elements and each YMM addition eight, so the speedups (3.47× and 6.45×) come much closer to the vector widths of four and eight than the memory-bound sizes do.
 * **Medium sizes fall in between.** At $n = 2^{20}$ the matrix (40 MiB) is streamed from memory, but $X$ (4 MiB) can stay in the L3 cache. The square $8192 \times 8192$ case (a 256 MiB matrix, but only a 32 KiB vector) behaves similarly. Both give speedups between the two extremes.
 * **One accumulator per kernel.** Each kernel uses a single accumulator register, so every addition waits for the previous one. Using several independent accumulators would let the processor overlap additions and would speed up in-cache sizes further. It would not help the memory-bound sizes.
 * **Reduction and tail overhead** are small. There is one horizontal reduction per 4,096 elements, and at most seven scalar tail elements per row.
-* **Measurement variation.** Background activity and CPU frequency changes on a laptop cause run-to-run variation. Outside the three recorded runs, single runs of the C kernel at $2^{25}$ took 443 ms and 377.5 ms, compared with 339–350 ms in the table. At $2^{20}$ another run gave 10.47 ms, below the table's range. The SIMD times varied much less (162–165 ms at $2^{25}$). That is why the main sizes were measured three times, and why speedups should be read as approximate (about ±10%).
+* **Measurement variation.** Background activity and CPU frequency changes cause run-to-run variation. Outside the three recorded runs, single runs of the C kernel at $2^{25}$ were up to about 30% slower than the recorded runs, while the SIMD times varied much less. That is why the main sizes were measured three times, and why speedups should be read as approximate (about ±10%).
+
+The table below converts the Release times from Section 4.1 into matrix read rate (bytes of $A$ read per call divided by the average time; the repeated reads of $X$ are not counted).
+
+| Release | C | Scalar x86-64 | SIMD XMM | SIMD YMM |
+| --- | ---: | ---: | ---: | ---: |
+| $m = 10$, $n = 2^{20}$ | 5.20 GB/s | 5.35 GB/s | 18.18 GB/s | 22.73 GB/s |
+| $m = 10$, $n = 2^{25}$ | 5.19 GB/s | 5.17 GB/s | 13.27 GB/s | 14.55 GB/s |
+| $m = 6$, $n = 2^{28}$ | 5.50 GB/s | 5.43 GB/s | 14.24 GB/s | 16.27 GB/s |
+
+C and scalar assembly stay at about 5.2–5.5 GB/s at every size, well below the rates the SIMD kernels reach on the same data. This confirms that they are limited by the chain of dependent additions, not by memory. The SIMD kernels start much higher at $2^{20}$ and fall to about 13–16 GB/s once the data is streamed from memory at $2^{25}$ and $2^{28}$. This is why YMM is 1.25× as fast as XMM at $2^{20}$ but only about 1.1× as fast at $2^{25}$ and $2^{28}$.
 
 ### 5.5 Cost of the Accuracy Fix
 
-The blocked summation does not measurably slow the kernels. The previous commit, rebuilt and run on the same machine at $n = 2^{25}$ (Release), measured C 431.8 ms, scalar 381.5 ms, XMM 214.2 ms and YMM 202.4 ms. The new kernels measured 339–350, 338–339, 162–164 and 158–159 ms respectively. The differences come from system conditions rather than the added block loop.
+The blocked summation does not measurably slow the kernels. The previous commit, rebuilt and run on the same machine at $n = 2^{25}$ (Release), measured C 431.8 ms, scalar 381.5 ms, XMM 214.2 ms and YMM 202.4 ms. The new kernels measured 339–350, 338–339, 162–164 and 158–159 ms respectively. The differences come from system conditions rather than the added block loop. These comparison runs are separate from the tables in Section 4, so their absolute times differ from those tables; only the relative comparison between the old and new kernels is meaningful here.
 
 ## 6. Memory Requirements and the $n = 2^{30}$ Test
 
 With $m = 10$, the program needs $(10n + n) \times 4$ bytes for $A$ and $X$, plus a negligible amount for the outputs. The full table is in Section 2.
 
-| Size | Memory needed ($m = 10$) | Test machine (7.70 GiB RAM, about 2 GiB free) |
+| Size | Memory needed ($m = 10$) | On the test machine |
 | --- | ---: | --- |
-| $n = 2^{30}$ | 44 GiB | Not feasible: more than five times the installed RAM, and above the 20 GiB Windows commit limit |
+| $n = 2^{30}$ | 44 GiB | Not feasible: far larger than the installed RAM and the Windows commit limit |
 | $n = 2^{29}$ | 22 GiB | Not feasible: above the commit limit |
 | $n = 2^{28}$ | 11 GiB | Not feasible: larger than physical RAM; the run would page constantly and the timings would be meaningless |
 | $n = 2^{25}$ | 1.375 GiB | Run successfully |
@@ -492,7 +493,7 @@ Because the block size (4,096) is a multiple of eight, only the last block of a 
 
 ### 8.1 Memory Limitations for Large Input Sizes
 
-Even with only 10 rows, $n = 2^{28}$ to $2^{30}$ need 11–44 GiB, far more than the 7.7 GiB on the test machine. Earlier attempts at large sizes caused heavy memory pressure and a slow system.
+Even with only 10 rows, $n = 2^{28}$ to $2^{30}$ need 11–44 GiB, far more than the RAM on the test machine. Earlier attempts at large sizes caused heavy memory pressure and a slow system.
 
 **Solution:** the program now calculates the memory requirement first and refuses sizes that cannot fit, instead of allocating blindly. The reduced-row $m = 6$, $n = 2^{28}$ test was added as a clearly labeled substitute (Section 6).
 
@@ -513,13 +514,13 @@ Without a scalar-tail loop, the leftover elements would be skipped. The kernels 
 
 ### 8.4 Build Portability
 
-The project's pre-build step called NASM at a fixed path, `C:\mingw64\bin\nasm.exe`, which did not exist on other test machines. NASM was installed under `C:\Program Files (x86)\SASM\NASM\`.
+The project's pre-build step called NASM at a fixed path, `C:\mingw64\bin\nasm.exe`, which did not exist on other test machines.
 
 **Solution:** the project file now uses a `NasmPath` property. It checks the `NASM` environment variable first, then common install locations, then `PATH`. `build.cmd` provides a command-line build that does not depend on the Visual Studio version.
 
 ### 8.5 Experimental Methodology
 
-The same input data, the same C answer key and the same timing method are used for all four kernels. Timings vary between runs on a laptop, so the main sizes were measured three times and reported with their range. The results still apply only to the tested machine, compiler and conditions.
+The same input data, the same C answer key and the same timing method are used for all four kernels. Timings vary between runs on a laptop, so the main sizes were measured three times and the mean is reported. The results still apply only to the tested machine, compiler and conditions.
 
 ## 9. AHA Moments and Key Learnings
 
@@ -528,7 +529,7 @@ The same input data, the same C answer key and the same timing method are used f
 * **A tolerance check cannot find every bug.** An exact-integer test, where any correct order gives the same answer, separates real indexing bugs from rounding effects.
 * **Test data can hide bugs.** With $n = 1003$, a multiple of the pattern length 17, every row was identical.
 * **Writing assembly does not guarantee better performance.** Optimized C and scalar assembly perform within a few percent of each other because both are limited by the same chain of dependent additions.
-* **Wider registers help only until memory becomes the limit.** YMM reached 8.6× in cache but only 2.2× when streaming 2.7 GB from memory, almost the same as XMM.
+* **Wider registers help only until memory becomes the limit.** YMM reached 6.45× in cache ($n = 1003$) but only 2.80× when streaming 2.7 GB from memory at $n = 2^{25}$, almost the same as XMM (2.56×).
 * **Memory capacity limits which experiments are possible.** Even with 10 rows, $n = 2^{30}$ needs 44 GiB.
 
 ## 10. Conclusion
@@ -537,9 +538,9 @@ All four kernels compute the matrix-vector product correctly. In every test that
 
 In the Release tests, SIMD YMM achieved the shortest execution time, followed by SIMD XMM. For $n = 2^{20}$, YMM achieved a speedup of 4.37x over C, while XMM achieved 3.50x. At $n = 2^{25}$, their speedups were 2.80x and 2.56x, respectively. For the largest tested configuration, $n = 2^{28}$ with $m = 6$, YMM achieved a speedup of 2.96x, while XMM achieved 2.59x. These results demonstrate the performance benefits of SIMD processing, although the speedups vary with input size and execution conditions. Scalar assembly performed similarly to C in Release, indicating that manual scalar assembly alone did not consistently provide a substantial improvement.
 
-The Debug results showed considerably larger speedups for the assembly implementations, particularly SIMD YMM, which reached 32.25x over C for $n = 2^{28}$ with (m = 6). However, these results are influenced by the performance of the unoptimized Debug C baseline and should not be interpreted as equivalent to Release performance.
+The Debug results showed considerably larger speedups for the assembly implementations, particularly SIMD YMM, which reached 32.25x over C for $n = 2^{28}$ with $m = 6$. However, these results are influenced by the performance of the unoptimized Debug C baseline and should not be interpreted as equivalent to Release performance.
 
-The $n = 2^{30}$, the $2^{29}$, and $2^{28}$ with $m = 10$ tests could not be run because they need 11–44 GiB of memory required. The largest completed sizes are $n = 2^{25}$ with $m = 10$, and $n = 2^{28}$ with $m = 6$.
+The $n = 2^{30}$, $2^{29}$ and $2^{28}$ tests with $m = 10$ could not be run because they need 11–44 GiB of memory. The largest completed sizes are $n = 2^{25}$ with $m = 10$, and $n = 2^{28}$ with $m = 6$.
 
 ## 11. Reproducibility and Future Work
 
