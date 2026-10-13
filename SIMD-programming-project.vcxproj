@@ -25,6 +25,14 @@
     <RootNamespace>SIMDprogrammingproject</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
+  <!-- NASM location: override with /p:NasmPath=... or the NASM environment variable. -->
+  <PropertyGroup>
+    <NasmPath Condition="'$(NasmPath)'=='' and '$(NASM)'!=''">$(NASM)</NasmPath>
+    <NasmPath Condition="'$(NasmPath)'=='' and Exists('C:\mingw64\bin\nasm.exe')">C:\mingw64\bin\nasm.exe</NasmPath>
+    <NasmPath Condition="'$(NasmPath)'=='' and Exists('C:\Program Files\NASM\nasm.exe')">C:\Program Files\NASM\nasm.exe</NasmPath>
+    <NasmPath Condition="'$(NasmPath)'=='' and Exists('C:\Program Files (x86)\SASM\NASM\nasm.exe')">C:\Program Files (x86)\SASM\NASM\nasm.exe</NasmPath>
+    <NasmPath Condition="'$(NasmPath)'==''">nasm.exe</NasmPath>
+  </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
@@ -109,6 +117,7 @@
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <FloatingPointModel>Precise</FloatingPointModel>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
@@ -121,7 +130,7 @@
       <EnableSegmentHeap>true</EnableSegmentHeap>
     </Manifest>
     <PreBuildEvent>
-      <Command>"C:\mingw64\bin\nasm.exe" -f win64 "$(ProjectDir)kernel_scalar.asm" -o "$(ProjectDir)kernel_scalar.obj" &amp;&amp; "C:\mingw64\bin\nasm.exe" -f win64 "$(ProjectDir)kernel_xmm.asm" -o "$(ProjectDir)kernel_xmm.obj" &amp;&amp; "C:\mingw64\bin\nasm.exe" -f win64 "$(ProjectDir)kernel_ymm.asm" -o "$(ProjectDir)kernel_ymm.obj"</Command>
+      <Command>"$(NasmPath)" -f win64 "$(ProjectDir)kernel_scalar.asm" -o "$(ProjectDir)kernel_scalar.obj" &amp;&amp; "$(NasmPath)" -f win64 "$(ProjectDir)kernel_xmm.asm" -o "$(ProjectDir)kernel_xmm.obj" &amp;&amp; "$(NasmPath)" -f win64 "$(ProjectDir)kernel_ymm.asm" -o "$(ProjectDir)kernel_ymm.obj"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -131,6 +140,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <FloatingPointModel>Precise</FloatingPointModel>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
@@ -143,7 +153,7 @@
       <EnableSegmentHeap>true</EnableSegmentHeap>
     </Manifest>
     <PreBuildEvent>
-      <Command>"C:\mingw64\bin\nasm.exe" -f win64 "$(ProjectDir)kernel_scalar.asm" -o "$(ProjectDir)kernel_scalar.obj" &amp;&amp; "C:\mingw64\bin\nasm.exe" -f win64 "$(ProjectDir)kernel_xmm.asm" -o "$(ProjectDir)kernel_xmm.obj" &amp;&amp; "C:\mingw64\bin\nasm.exe" -f win64 "$(ProjectDir)kernel_ymm.asm" -o "$(ProjectDir)kernel_ymm.obj"</Command>
+      <Command>"$(NasmPath)" -f win64 "$(ProjectDir)kernel_scalar.asm" -o "$(ProjectDir)kernel_scalar.obj" &amp;&amp; "$(NasmPath)" -f win64 "$(ProjectDir)kernel_xmm.asm" -o "$(ProjectDir)kernel_xmm.obj" &amp;&amp; "$(NasmPath)" -f win64 "$(ProjectDir)kernel_ymm.asm" -o "$(ProjectDir)kernel_ymm.obj"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
