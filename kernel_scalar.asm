@@ -2,6 +2,9 @@
 default rel
 section .text
 
+; Columns per block. MUST match BLOCK_SIZE in main.c.
+%define BLOCK_SIZE 4096
+
 global kernel_scalar
 
 ; void kernel_scalar(
@@ -37,11 +40,22 @@ kernel_scalar:
     jae .done
 
     xor r15, r15          ; j = 0
-    xorps xmm0, xmm0      ; sum = 0.0
+    xorps xmm3, xmm3      ; row total = 0.0
 
-.inner_loop:
+.block_loop:
     cmp r15, r13
     jae .store_result
+
+    ; r10 = min(j + BLOCK_SIZE, n) = end of this block
+    lea r10, [r15+BLOCK_SIZE]
+    cmp r10, r13
+    cmova r10, r13
+
+    xorps xmm0, xmm0      ; block partial sum = 0.0
+
+.inner_loop:
+    cmp r15, r10
+    jae .end_block
 
     movss xmm1, [rbx+r15*4]
     mulss xmm1, [rsi+r15*4]
@@ -50,8 +64,12 @@ kernel_scalar:
     inc r15
     jmp .inner_loop
 
+.end_block:
+    addss xmm3, xmm0      ; row total += block partial
+    jmp .block_loop
+
 .store_result:
-    movss [rdi+r14*4], xmm0
+    movss [rdi+r14*4], xmm3
 
     ; Move A to the next row: n * sizeof(float)
     lea rax, [r13*4]

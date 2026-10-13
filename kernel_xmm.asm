@@ -1,6 +1,9 @@
 default rel
 section .text
 
+; Columns per block. MUST match BLOCK_SIZE in main.c (multiple of 8).
+%define BLOCK_SIZE 4096
+
 global kernel_xmm
 
 ; void kernel_xmm(
@@ -34,11 +37,22 @@ kernel_xmm:
     jae .done
 
     xor r15, r15        ; j = 0
+    vxorps xmm3, xmm3, xmm3  ; row total = 0
+
+.block_loop:
+    cmp r15, r13
+    jae .store_result
+
+    ; r10 = min(j + BLOCK_SIZE, n) = end of this block
+    lea r10, [r15+BLOCK_SIZE]
+    cmp r10, r13
+    cmova r10, r13
+
     vxorps xmm0, xmm0, xmm0  ; four partial sums = 0
 
 .vector_loop:
-    ; Continue only if at least four elements remain
-    mov rax, r13
+    ; Continue only if at least four elements remain in this block
+    mov rax, r10
     sub rax, r15
     cmp rax, 4
     jb .reduce
@@ -60,9 +74,9 @@ kernel_xmm:
     vhaddps xmm0, xmm0, xmm0
 
 .scalar_tail:
-    ; Process leftover elements, if any
-    cmp r15, r13
-    jae .store_result
+    ; Process leftover elements, if any (only possible in the last block)
+    cmp r15, r10
+    jae .end_block
 
     vmovss xmm1, [rbx+r15*4]
     vmulss xmm1, xmm1, [rsi+r15*4]
@@ -71,8 +85,12 @@ kernel_xmm:
     inc r15
     jmp .scalar_tail
 
+.end_block:
+    vaddss xmm3, xmm3, xmm0  ; row total += block partial
+    jmp .block_loop
+
 .store_result:
-    vmovss [rdi+r14*4], xmm0
+    vmovss [rdi+r14*4], xmm3
 
     ; Advance to the next matrix row
     lea rax, [r13*4]
