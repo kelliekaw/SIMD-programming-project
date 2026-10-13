@@ -88,9 +88,9 @@ The index `i` is a 64-bit `size_t`, so `m * n` does not overflow for any tested 
 | Extra boundary tests | 10 | 1,004–1,010, 4,097, 4,099, 4,103 | Run (Debug and Release) |
 | Case 1 | 10 | $2^{20}$ = 1,048,576 | Run (Debug and Release) |
 | Case 2 | 10 | $2^{25}$ = 33,554,432 | Run (Debug and Release) |
-| Case 3 | 10 | $2^{30}$ = 1,073,741,824 | **Not run:** needs 44 GiB; the machine has 7.7 GiB |
+| Case 3 | 10 | $2^{30}$ = 1,073,741,824 | **Not run:** needs 44 GiB |
 | Fallback | 10 | $2^{29}$ and $2^{28}$ | **Not run:** needs 22 GiB and 11 GiB |
-| Reduced-row fallback | **1** | $2^{28}$ = 268,435,456 | Run (Debug and Release); needs 2 GiB |
+| Reduced-row fallback | **6** | $2^{28}$ = 268,435,456 | Run (Debug and Release); needs 7 GiB |
 | Square (extra) | 1,003 | 1,003 | Run (Debug and Release) |
 | Square (extra) | 8,192 | 8,192 | Run (Debug and Release) |
 
@@ -102,35 +102,34 @@ See Section 6 for the full memory-feasibility discussion.
 
 The program prints, for every kernel: the average execution time, the speedup over C, the first five and last five elements of $Y$, the required check against C, and the double-reference diagnostic.
 
-> **Screenshots still to be captured.** The screenshots below must be retaken with the current version of the program. The commands for each one are listed in Section 11. Until then, the exact program output is reproduced as text in Section 3.5.
-
 #### Debug Version
 
-`[INSERT SCREENSHOT: screenshots/debug_n1003.png — build\Debug\matvec.exe 1003 10 30]`
+##### $m = 10, n = 1003$
+![final 1003 debug](screenshots/final_1003_debug.png)
 
-`[INSERT SCREENSHOT: screenshots/debug_n2p20.png — build\Debug\matvec.exe 1048576 10 30]`
+##### $m = 10, n = 2^{20}$
+![final 220 debug](screenshots/final_220_debug.png)
 
-`[INSERT SCREENSHOT: screenshots/debug_n2p25.png — build\Debug\matvec.exe 33554432 10 30]`
+##### $m = 10, n = 2^{25}$
+![final 225 debug](screenshots/final_225_debug.png)
 
-`[INSERT SCREENSHOT: screenshots/debug_n2p28_m1.png — build\Debug\matvec.exe 268435456 1 30]`
+##### $m = 6, n = 2^{28}$
+![final 228 debug](screenshots/final_228_debug.png)
 
 #### Release Version
 
-`[INSERT SCREENSHOT: screenshots/release_n1003.png — build\Release\matvec.exe 1003 10 30]`
+##### $m = 10, n = 1003$
+![final 1003 release](screenshots/final_1003_release.png)
+##### $m = 10, n = 2^{20}$
+![final 220 release](screenshots/final_220_release.png)
+##### $m = 10, n = 2^{25}$
+![final 225 release](screenshots/final_225_release.png)
+##### $m = 6, n = 2^{28}$
+![final 228 release](screenshots/final_228_release.png)
 
-`[INSERT SCREENSHOT: screenshots/release_n2p20.png — build\Release\matvec.exe 1048576 10 30]`
+#### $m = 10, n = 2^{30}$ (not run)
 
-`[INSERT SCREENSHOT: screenshots/release_n2p25.png — build\Release\matvec.exe 33554432 10 30]`
-
-`[INSERT SCREENSHOT: screenshots/release_n2p28_m1.png — build\Release\matvec.exe 268435456 1 30]`
-
-#### $n = 2^{30}$ (not run)
-
-`[INSERT SCREENSHOT: screenshots/n2p30_not_run.png — build\Release\matvec.exe 1073741824 10 30, showing the NOT RUN memory message]`
-
-#### Self-test
-
-`[INSERT SCREENSHOT: screenshots/selftest.png — build\Release\matvec.exe --selftest]`
+![not run](screenshots/not_run.png)
 
 #### Historical screenshots (before the fix)
 
@@ -155,7 +154,7 @@ Boundary, $n = 1003$: ![1003](screenshots/1003.png)
 
 The program performs two separate comparisons, and they answer different questions.
 
-**1. Required check: each assembly kernel against C.** As the assignment requires, the C output is the answer key. The scalar, XMM and YMM outputs are each compared with it element by element.
+**1. Sanity check: each assembly kernel against C.** As the assignment requires, the C output is the answer key. The scalar, XMM and YMM outputs are each compared with it element by element.
 
 **2. Additional diagnostic: each kernel against a double-precision reference.** A separate function, `kernel_reference`, computes every row with an ordinary, unblocked `double` accumulation. This measures how close each kernel is to the mathematically correct value. Agreeing with C does not prove a result is accurate, which is exactly what happened before the fix (Section 3.4).
 
@@ -262,93 +261,6 @@ The scalar assembly result is bit-identical to C in every test (maximum differen
 
 All kernels pass the diagnostic as well. At $n = 2^{25}$ the error of C dropped from 8.73% to 0.00037%. The larger error at $2^{28}$ (0.024%) comes from the row total: it reaches about 169 million, where the `float` gap is 16, and 65,536 block sums are added to it. This is still about 20 times below the tolerance.
 
-**First and last five output values (Release, identical in Debug):**
-
-<details>
-<summary>n = 1003 (m = 10)</summary>
-
-```
-Double reference: first Y = 630.9900, last Y = 630.9900
-C / Scalar   first: 630.9898 630.9898 630.9898 630.9898 630.9898   last: 630.9898 630.9898 630.9898 630.9898 630.9898
-XMM / YMM    first: 630.9901 630.9901 630.9901 630.9901 630.9901   last: 630.9901 630.9901 630.9901 630.9901 630.9901
-```
-(All rows are equal because $1003$ is a multiple of 17; see Section 2.)
-</details>
-
-<details>
-<summary>n = 2^20 (m = 10)</summary>
-
-```
-Double reference: first Y = 660599.8981, last Y = 660602.6581
-C / Scalar  first: 660601.5000 660601.6875 660601.1875 660599.9375 660599.9375
-            last:  660601.9375 660603.0000 660603.5000 660603.1250 660604.3125
-SIMD XMM    first: 660599.6875 660599.7500 660599.0000 660597.7500 660598.0000
-            last:  660600.0625 660600.9375 660601.0625 660601.0000 660602.6875
-SIMD YMM    first: 660599.7500 660599.8125 660599.1250 660597.9375 660598.1250
-            last:  660600.1875 660601.0000 660601.3125 660601.2500 660602.7500
-```
-</details>
-
-<details>
-<summary>n = 2^25 (m = 10) — full program output, Release</summary>
-
-```
-========== Matrix-Vector Product ==========
-Build configuration: Release
-Matrix dimensions: 10 x 33554432 (m x n), X length 33554432, Y length 10
-Repetitions: 30
-Block size: 4096 columns
-CPU: AVX supported, AVX2 supported
-Memory required: 1.375 GiB (A 1.250 GiB, X 0.125 GiB); physical RAM 7.70 GiB total, 1.96 GiB available
-
-Checking Scalar x86-64 against C...
-Checking SIMD XMM against C...
-Checking SIMD YMM against C...
-
---- C ---
-Average execution time: 345.269953 ms   Speedup vs C: 1.00x
-First 5 Y values: 21139216.0000 21139224.0000 21139214.0000 21139218.0000 21139214.0000
-Last 5 Y values:  21139218.0000 21139216.0000 21139214.0000 21139216.0000 21139214.0000
-Check vs C (required):   BASELINE (answer key)
-Check vs double ref:     PASS  max abs err=78.2699, max rel err=0.000370%, outside tolerance=0/10
-
---- Scalar x86-64 ---
-Average execution time: 337.659943 ms   Speedup vs C: 1.02x
-First 5 Y values: 21139216.0000 21139224.0000 21139214.0000 21139218.0000 21139214.0000
-Last 5 Y values:  21139218.0000 21139216.0000 21139214.0000 21139216.0000 21139214.0000
-Check vs C (required):   PASS  max abs diff=0.0000, max rel diff=0.000000%, outside tolerance=0/10
-Check vs double ref:     PASS  max abs err=78.2699, max rel err=0.000370%, outside tolerance=0/10
-
---- SIMD XMM ---
-Average execution time: 164.062660 ms   Speedup vs C: 2.10x
-First 5 Y values: 21139118.0000 21139128.0000 21139114.0000 21139124.0000 21139114.0000
-Last 5 Y values:  21139124.0000 21139116.0000 21139124.0000 21139116.0000 21139120.0000
-Check vs C (required):   PASS  max abs diff=100.0000, max rel diff=0.000473%, outside tolerance=0/10
-Check vs double ref:     PASS  max abs err=178.0899, max rel err=0.000842%, outside tolerance=0/10
-
---- SIMD YMM ---
-Average execution time: 158.816643 ms   Speedup vs C: 2.17x
-First 5 Y values: 21139118.0000 21139128.0000 21139114.0000 21139124.0000 21139114.0000
-Last 5 Y values:  21139124.0000 21139116.0000 21139124.0000 21139116.0000 21139120.0000
-Check vs C (required):   PASS  max abs diff=100.0000, max rel diff=0.000473%, outside tolerance=0/10
-Check vs double ref:     PASS  max abs err=178.0899, max rel err=0.000842%, outside tolerance=0/10
-
-Double reference: first Y = 21139291.8499, last Y = 21139291.8799
-Tolerance: 0.5% relative (allowed = 0.005 * max(1, |expected|))
-Overall check vs C: ALL PASS
-```
-</details>
-
-<details>
-<summary>n = 2^28, m = 1 (reduced-row fallback)</summary>
-
-```
-Double reference: Y = 169114343.4034
-C / Scalar  Y = 169074368.0000
-XMM / YMM   Y = 169074096.0000
-```
-</details>
-
 ### 3.6 Correctness by Kernel
 
 **C.** The baseline. After the fix, its error against the double reference is at most 0.00037% for $n \le 2^{25}$ and 0.024% at $n = 2^{28}$. Before the fix it was 8.7% at $2^{25}$, which is why it could not serve as a reliable answer key.
@@ -390,46 +302,47 @@ $$
 $$
 
 Debug and Release results are shown in separate tables and must not be compared with each other: the C kernel is compiled differently in each, while the assembly kernels are identical.
-
 ### 4.1 Release Configuration
 
-**$n = 1003$, $m = 10$ (single run)**
 
-| Kernel | Time (ms) | Speedup vs. C |
-| --- | ---: | ---: |
-| C | 0.009323 | 1.00× |
-| Scalar x86-64 | 0.009710 | 0.96× |
-| SIMD XMM | 0.002337 | 3.99× |
-| SIMD YMM | 0.001087 | 8.58× |
+**$m = 10$, $n = 1003$**
 
-**$n = 2^{20}$, $m = 10$ (mean of 3 runs)**
+| Kernel        | Time (ms) | Speedup vs. C |
+| ---           | ---:      | ---:          |
+| C             | 0.007477  | 1.00×         |
+| Scalar x86-64 | 0.007517  | 0.99×         |
+| SIMD XMM      | 0.002157  | 3.47×         |
+| SIMD YMM      | 0.001160  | 6.45×         |
 
-| Kernel | Time (ms) | Range (ms) | Speedup vs. C |
-| --- | ---: | ---: | ---: |
-| C | 11.665 | 11.149–12.562 | 1.00× |
-| Scalar x86-64 | 11.020 | 10.624–11.296 | 1.06× |
-| SIMD XMM | 5.022 | 4.847–5.233 | 2.32× |
-| SIMD YMM | 3.980 | 3.673–4.248 | 2.93× |
+**$m = 10$, $n = 2^{20}$**
 
-**$n = 2^{25}$, $m = 10$ (mean of 3 runs)**
+| Kernel        | Time (ms) | Speedup vs. C |
+| ------------- | --------: | ------------: |
+| C             |  8.067123 |         1.00x |
+| Scalar x86-64 |  7.845467 |         1.03x |
+| SIMD XMM      |  2.306643 |         3.50x |
+| SIMD YMM      |  1.845677 |         4.37x |
 
-| Kernel | Time (ms) | Range (ms) | Speedup vs. C |
-| --- | ---: | ---: | ---: |
-| C | 344.976 | 339.243–350.414 | 1.00× |
-| Scalar x86-64 | 338.145 | 337.660–338.998 | 1.02× |
-| SIMD XMM | 163.140 | 162.399–164.063 | 2.11× |
-| SIMD YMM | 158.416 | 157.777–158.817 | 2.18× |
+**$m = 10$, $n = 2^{25}$**
 
-**$n = 2^{28}$, $m = 1$ — reduced-row fallback (single run)**
+| Kernel        |  Time (ms) | Speedup vs. C |
+| ------------- | ---------: | ------------: |
+| C             | 258.833680 |         1.00x |
+| Scalar x86-64 | 259.478270 |         1.00x |
+| SIMD XMM      | 101.108437 |         2.56x |
+| SIMD YMM      |  92.275993 |         2.80x |
 
-| Kernel | Time (ms) | Speedup vs. C |
-| --- | ---: | ---: |
-| C | 303.297 | 1.00× |
-| Scalar x86-64 | 273.603 | 1.11× |
-| SIMD XMM | 132.096 | 2.30× |
-| SIMD YMM | 124.836 | 2.43× |
+**$m = 6$, $n = 2^{28}$**
 
-**Square matrices (single run)**
+| Kernel        |   Time (ms) | Speedup vs. C |
+| ------------- | ----------: | ------------: |
+| C             | 1171.333803 |         1.00x |
+| Scalar x86-64 | 1186.533700 |         0.99x |
+| SIMD XMM      |  452.303303 |         2.59x |
+| SIMD YMM      |  395.874420 |         2.96x |
+
+
+**Square matrices**
 
 | Kernel | $1003 \times 1003$ (ms) | Speedup | $8192 \times 8192$ (ms) | Speedup |
 | --- | ---: | ---: | ---: | ---: |
@@ -438,45 +351,46 @@ Debug and Release results are shown in separate tables and must not be compared 
 | SIMD XMM | 0.413 | 2.87× | 28.277 | 2.49× |
 | SIMD YMM | 0.172 | 6.90× | 17.811 | 3.96× |
 
+
 ### 4.2 Debug Configuration
 
-**$n = 1003$, $m = 10$ (single run)**
+**$m = 10$, $n = 1003$**
 
 | Kernel | Time (ms) | Speedup vs. C |
 | --- | ---: | ---: |
-| C | 0.022563 | 1.00× |
-| Scalar x86-64 | 0.009723 | 2.32× |
-| SIMD XMM | 0.002350 | 9.60× |
-| SIMD YMM | 0.001423 | 15.85× |
+| C | 0.030203 | 1.00× |
+| Scalar x86-64 | 0.008127 | 3.72× |
+| SIMD XMM | 0.002840 | 10.63× |
+| SIMD YMM | 0.001133 | 26.65× |
 
-**$n = 2^{20}$, $m = 10$ (mean of 3 runs)**
+**$m = 10$, $n = 2^{20}$**
 
-| Kernel | Time (ms) | Range (ms) | Speedup vs. C |
-| --- | ---: | ---: | ---: |
-| C | 23.693 | 23.457–23.843 | 1.00× |
-| Scalar x86-64 | 10.748 | 10.324–11.393 | 2.20× |
-| SIMD XMM | 5.746 | 3.786–7.038 | 4.12× |
-| SIMD YMM | 3.698 | 3.280–3.939 | 6.41× |
+| Kernel        | Time (ms) | Speedup vs. C |
+| ------------- | --------: | ------------: |
+| C             | 31.823740 |         1.00x |
+| Scalar x86-64 |  7.928527 |         4.01x |
+| SIMD XMM      |  2.329647 |        13.66x |
+| SIMD YMM      |  1.737090 |        18.32x |
 
-**$n = 2^{25}$, $m = 10$ (mean of 3 runs)**
+**$m = 10$, $n = 2^{25}$**
 
-| Kernel | Time (ms) | Range (ms) | Speedup vs. C |
-| --- | ---: | ---: | ---: |
-| C | 739.024 | 734.742–741.402 | 1.00× |
-| Scalar x86-64 | 340.916 | 337.797–346.652 | 2.17× |
-| SIMD XMM | 163.603 | 162.470–164.720 | 4.52× |
-| SIMD YMM | 161.894 | 158.616–165.298 | 4.57× |
+| Kernel        |  Time (ms) | Speedup vs. C |
+| ------------- | ---------: | ------------: |
+| C             | 979.559753 |         1.00x |
+| Scalar x86-64 | 253.512073 |         3.86x |
+| SIMD XMM      |  94.281503 |        10.39x |
+| SIMD YMM      |  85.820090 |        11.41x |
 
-**$n = 2^{28}$, $m = 1$ — reduced-row fallback (single run)**
+**$m = 6$, $n = 2^{28}$**
 
-| Kernel | Time (ms) | Speedup vs. C |
-| --- | ---: | ---: |
-| C | 632.471 | 1.00× |
-| Scalar x86-64 | 299.116 | 2.11× |
-| SIMD XMM | 156.930 | 4.03× |
-| SIMD YMM | 149.821 | 4.22× |
+| Kernel        |   Time (ms) | Speedup vs. C |
+| ------------- | ----------: | ------------: |
+| C             | 4699.908370 |         1.00x |
+| Scalar x86-64 | 1189.982283 |         3.95x |
+| SIMD XMM      |  297.483420 |        15.80x |
+| SIMD YMM      |  145.752977 |        32.25x |
 
-**Square matrices (single run)**
+**Square matrices**
 
 | Kernel | $1003 \times 1003$ (ms) | Speedup | $8192 \times 8192$ (ms) | Speedup |
 | --- | ---: | ---: | ---: | ---: |
@@ -500,19 +414,29 @@ The previous version of this README reported the following Release times. They w
 
 ### 5.1 C vs. Scalar x86-64 Assembly
 
-In **Release**, scalar assembly was 0.96×–1.11× the speed of C, essentially the same. The generated code for the C kernel (inspected with `/FAs`) uses scalar `mulss`/`addss` instructions and no packed instructions. Under `/fp:precise`, the compiler is not allowed to reorder the floating-point additions, so it cannot vectorize the loop. Both kernels therefore do the same work: one multiplication and one addition per element on a single chain of dependent additions.
+In **Release**, scalar assembly was 0.99×–1.03× the speed of C, essentially the same. The generated code for the C kernel (inspected with `/FAs`) uses scalar `mulss`/`addss` instructions and no packed instructions. Under `/fp:precise`, the compiler is not allowed to reorder the floating-point additions, so it cannot vectorize the loop. Both kernels therefore do the same work: one multiplication and one addition per element on a single chain of dependent additions.
 
 At $n = 2^{25}$ both kernels process about one element per nanosecond (335.5 million elements in about 340 ms). That is consistent with the roughly 4-cycle latency of each dependent `addss` at the CPU's turbo frequency. The loop is limited by that dependency chain, not by the instruction count.
 
-In **Debug**, C is about 2.2× slower than scalar assembly, because unoptimized code keeps `partial` and `total` on the stack and reloads them on every iteration. The assembly kernels are not affected by the compiler settings and take the same time in both configurations. The Debug "speedups" are therefore mostly a measure of how slow unoptimized C is.
+In **Debug**, scalar assembly achieved speedups of 3.86x to 4.01x compared to C, because unoptimized code keeps `partial` and `total` on the stack and reloads them on every iteration. The assembly kernels are not affected by the compiler settings and take the same time in both configurations. The Debug "speedups" are therefore mostly a measure of how slow unoptimized C is.
 
 ### 5.2 SIMD XMM Performance
 
-XMM processes four elements per vector instruction. When the data fits in cache ($n = 1003$, 39 KiB), it achieved **3.99×** over C in Release, almost exactly its vector width. For the large inputs, the speedup fell to 2.32× at $2^{20}$ and 2.11× at $2^{25}$.
+XMM processes four elements per vector instruction. In the latest Release tests, XMM achieved speedups of 3.50x at $n = 2^{20}$, 2.56x at $n = 2^{25}$, and 2.59x at $n = 2^{28}$. These results demonstrate that SIMD can improve performance by processing multiple elements within a single vector instruction.
+
+In Debug, XMM achieved speedups of 13.66x, 10.39x, and 15.80x for the same respective input sizes. These larger speedups are primarily influenced by the slower Debug C baseline and should not be compared directly with Release speedups as if the build configurations were equivalent.
+
+The speedups are not necessarily equal to the vector width because overall performance also depends on data movement, accumulation and reduction operations, loop overhead, cache behavior, and memory bandwidth. The results show that XMM provides a substantial improvement over the C baseline, particularly when the baseline is affected by Debug build overhead.
 
 ### 5.3 SIMD YMM Performance
 
-YMM processes eight elements per vector instruction. At $n = 1003$ it achieved **8.58×** over C in Release, again close to its vector width. It was the fastest kernel in every Release test. However, at $n = 2^{25}$ it was only 3% faster than XMM (158.4 ms vs. 163.1 ms).
+YMM processes eight elements per vector instruction. It achieved the best execution time among the four implementations in all six updated test configurations.
+
+In Release, YMM achieved speedups of 4.37x at $n = 2^{20}$, 2.80x at $n = 2^{25}$, and 2.96x at $n = 2^{28}$. Compared with XMM, YMM was approximately 20.0% faster at $n = 2^{20}$, 8.7% faster at $n = 2^{25}$, and 12.5% faster at $n = 2^{28}$, based on execution time.
+
+In Debug, YMM achieved speedups of 18.32x, 11.41x, and 32.25x, respectively. At $n = 2^{28}$, it completed the computation in approximately 145.75 ms, compared with 297.48 ms for XMM and 4,699.91 ms for C. This illustrates the potential benefits of wider SIMD operations, although the particularly large Debug speedup is also influenced by the C implementation's much higher execution time.
+
+Overall, YMM consistently outperformed XMM in the updated measurements. However, the improvement was not proportional to the doubling of vector width from 128 to 256 bits. Wider vectors do not automatically produce a twofold speedup because other parts of the computation, including accumulation, memory access, and reduction overhead, can limit performance.
 
 ### 5.4 Why the Measured Speedup Is Not Equal to the Vector Width
 
@@ -546,7 +470,7 @@ Memory required: 44.000 GiB (A 40.000 GiB, X 4.000 GiB); physical RAM 7.70 GiB t
 NOT RUN: required memory exceeds 80% of physical RAM. Use a smaller n or m (or --force at your own risk).
 ```
 
-**The largest size tested with the original $m = 10$ configuration is $n = 2^{25}$.** As a clearly labeled substitute for the required $2^{28}$ fallback, the program was run with **$m = 1$ and $n = 2^{28}$** (2 GiB), which exercises the kernels on vectors of $2^{28}$ elements. This is a reduced-row configuration and is **not** a completion of the $m = 10$, $n = 2^{28}$ test. $m = 1$, $n = 2^{29}$ (4 GiB) would pass the 80% check but exceeds the memory that was free during testing, so it was not run. It could be attempted after closing other programs:
+**The largest size tested with the original $m = 10$ configuration is $n = 2^{25}$.** As a clearly labeled substitute for the required $2^{28}$ fallback, the program was run with **$m = 6$ and $n = 2^{28}$**, which exercises the kernels on vectors of $2^{28}$ elements. This is a reduced-row configuration and is **not** a completion of the $m = 10$, $n = 2^{28}$ test. Larger sizes could be attempted after closing other programs:
 
 ```
 build\Release\matvec.exe 536870912 1 30
@@ -570,7 +494,7 @@ Because the block size (4,096) is a multiple of eight, only the last block of a 
 
 Even with only 10 rows, $n = 2^{28}$ to $2^{30}$ need 11–44 GiB, far more than the 7.7 GiB on the test machine. Earlier attempts at large sizes caused heavy memory pressure and a slow system.
 
-**Solution:** the program now calculates the memory requirement first and refuses sizes that cannot fit, instead of allocating blindly. The reduced-row $m = 1$, $n = 2^{28}$ test was added as a clearly labeled substitute (Section 6).
+**Solution:** the program now calculates the memory requirement first and refuses sizes that cannot fit, instead of allocating blindly. The reduced-row $m = 6$, $n = 2^{28}$ test was added as a clearly labeled substitute (Section 6).
 
 ### 8.2 Floating-Point Discrepancies at Large $n$
 
@@ -580,25 +504,20 @@ At $n = 2^{25}$, the four kernels disagreed by up to 9%, and the C baseline was 
 
 **Solution:** blocked summation in all four kernels, keeping single precision and the original 0.5% tolerance. All kernels now agree with C within 0.0005%, and with the double reference within 0.03%.
 
-### 8.3 Correctness Check Did Not Follow the Assignment
 
-The earlier program compared all kernels only against the double-precision reference. The `correctness_check` function that compared against C existed but was never called. It also stopped at the first mismatch and did not detect `NaN`.
-
-**Solution:** the program now runs the required comparison against C and, separately, the double-reference diagnostic. It counts every element outside the tolerance, reports the maximum absolute and relative differences, and treats `NaN` as a failure.
-
-### 8.4 SIMD Boundary Handling and a Hidden Weakness in the $n = 1003$ Test
+### 8.3 SIMD Boundary Handling and a Hidden Weakness in the $n = 1003$ Test
 
 Without a scalar-tail loop, the leftover elements would be skipped. The kernels already handled the tail correctly. However, with this initialization, $n = 1003$ produces ten identical rows (Section 2), so that test alone could not detect a row-offset error.
 
 **Solution:** additional boundary sizes, plus an exact-integer self-test with row-dependent values. The self-test was itself checked by confirming that it catches deliberately introduced bugs.
 
-### 8.5 Build Portability
+### 8.4 Build Portability
 
-The project's pre-build step called NASM at a fixed path, `C:\mingw64\bin\nasm.exe`, which did not exist on the test machine. NASM was installed under `C:\Program Files (x86)\SASM\NASM\`.
+The project's pre-build step called NASM at a fixed path, `C:\mingw64\bin\nasm.exe`, which did not exist on other test machines. NASM was installed under `C:\Program Files (x86)\SASM\NASM\`.
 
 **Solution:** the project file now uses a `NasmPath` property. It checks the `NASM` environment variable first, then common install locations, then `PATH`. `build.cmd` provides a command-line build that does not depend on the Visual Studio version.
 
-### 8.6 Experimental Methodology
+### 8.5 Experimental Methodology
 
 The same input data, the same C answer key and the same timing method are used for all four kernels. Timings vary between runs on a laptop, so the main sizes were measured three times and reported with their range. The results still apply only to the tested machine, compiler and conditions.
 
@@ -616,9 +535,11 @@ The same input data, the same C answer key and the same timing method are used f
 
 All four kernels compute the matrix-vector product correctly. In every test that fit in memory, in both Debug and Release, the scalar, XMM and YMM outputs agree with the C answer key within 0.0005%, and every kernel agrees with an independent double-precision reference within 0.03%. The earlier large-$n$ failures were caused by single-precision accumulation error in a single running sum, not by an implementation bug. They were fixed with blocked summation, without changing the precision, the tolerance or the input data.
 
-In the Release tests, SIMD YMM was the fastest kernel, followed by SIMD XMM. When the data fits in cache, their speedups match their vector widths (8.58× and 3.99× at $n = 1003$). For large inputs, memory bandwidth limits both to about 2.1–2.2× at $n = 2^{25}$. Scalar assembly performs about the same as optimized C.
+In the Release tests, SIMD YMM achieved the shortest execution time, followed by SIMD XMM. For $n = 2^{20}$, YMM achieved a speedup of 4.37x over C, while XMM achieved 3.50x. At $n = 2^{25}$, their speedups were 2.80x and 2.56x, respectively. For the largest tested configuration, $n = 2^{28}$ with $m = 6$, YMM achieved a speedup of 2.96x, while XMM achieved 2.59x. These results demonstrate the performance benefits of SIMD processing, although the speedups vary with input size and execution conditions. Scalar assembly performed similarly to C in Release, indicating that manual scalar assembly alone did not consistently provide a substantial improvement.
 
-The $n = 2^{30}$ test, and the $2^{29}$ and $2^{28}$ fallbacks with $m = 10$, could not be run because they need 11–44 GiB on a 7.7 GiB machine. The largest completed sizes are $n = 2^{25}$ with $m = 10$, and $n = 2^{28}$ with $m = 1$.
+The Debug results showed considerably larger speedups for the assembly implementations, particularly SIMD YMM, which reached 32.25x over C for $n = 2^{28}$ with (m = 6). However, these results are influenced by the performance of the unoptimized Debug C baseline and should not be interpreted as equivalent to Release performance.
+
+The $n = 2^{30}$, the $2^{29}$, and $2^{28}$ with $m = 10$ tests could not be run because they need 11–44 GiB of memory required. The largest completed sizes are $n = 2^{25}$ with $m = 10$, and $n = 2^{28}$ with $m = 6$.
 
 ## 11. Reproducibility and Future Work
 
@@ -665,10 +586,6 @@ The defaults are $n = 2^{25}$, $m = 10$ and 30 repetitions. $n$ can also be writ
 3. Select the **x64** platform and the **Debug** or **Release** configuration.
 4. Under **Project → Properties → Debugging → Command Arguments**, enter the test arguments, for example `33554432 10 30`.
 5. Press **Ctrl+F5** to run without the debugger. The pre-build step assembles the `.asm` files with NASM.
-
-### Capturing the Screenshots
-
-Run each command listed in Section 3.1 in a cmd window (or with Ctrl+F5 from Visual Studio). Take a screenshot with **Win+Shift+S**, save it under `screenshots\` with the file name given in the placeholder, and replace the placeholder line with `![description](screenshots/<file>.png)`.
 
 ### Future Work
 
